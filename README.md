@@ -51,7 +51,7 @@ working when it expires, or when you change your PostDaily password.
 | Channel | Get Many | Lists connected channels, their limits, and whether each can post now. |
 
 To attach media to a post, use either way:
-- put the `id` from **Upload** or **Import From URL** in **Media IDs**;
+- put the `media.mediaId` from **Upload** or **Import From URL** in **Media IDs**;
 - put public URLs in **Media URLs**.
 
 ## Using it safely
@@ -91,7 +91,7 @@ PostDaily's message ends up in the item's `error` field.
 - **Video folder to TikTok and YouTube:**
   1. **Google Drive Trigger**, then **Google Drive: Download**.
   2. **PostDaily: Media → Upload**.
-  3. **PostDaily: Post → Create** with **Media IDs** set to `{{ $json.media.id }}`.
+  3. **PostDaily: Post → Create** with **Media IDs** set to `{{ $json.media.mediaId }}`.
 - **Spreadsheet to queue:**
   1. **Google Sheets** rows.
   2. **PostDaily: Post → Create**, with **Mode** set to Add to Queue. This
