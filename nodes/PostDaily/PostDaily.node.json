@@ -1,0 +1,18 @@
+{
+	"node": "n8n-nodes-postdaily.postDaily",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Marketing & Content"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": "https://www.postdaily.app/help/connect-with-an-api-key"
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/mehedihasan2810/n8n-nodes-postdaily#readme"
+			}
+		]
+	}
+}
