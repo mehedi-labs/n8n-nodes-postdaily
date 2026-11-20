@@ -13,7 +13,7 @@ import { NodeApiError, NodeConnectionTypes, NodeOperationError } from 'n8n-workf
 import { channelFields, channelOperations } from './descriptions/ChannelDescription';
 import { mediaFields, mediaOperations } from './descriptions/MediaDescription';
 import { postFields, postOperations } from './descriptions/PostDescription';
-import { callPostDaily, splitList } from './GenericFunctions';
+import { callPostDaily, defaultIdempotencyKey, splitList } from './GenericFunctions';
 
 /**
  * PostDaily's list tools page at most 50 items per call. Programmatic style
@@ -55,7 +55,8 @@ function channelSettingsArg(
 	if (!Array.isArray(parsed)) {
 		throw new NodeOperationError(this.getNode(), 'Network Options must be a JSON list', {
 			itemIndex,
-			description: 'For example: [{"channel": "youtube", "options": {"youtube": {"title": "My video"}}}]',
+			description:
+				'For example: [{"channel": "youtube", "options": {"youtube": {"title": "My video"}}}]',
 		});
 	}
 
@@ -112,10 +113,19 @@ export class PostDaily implements INodeType {
 				const data = await callPostDaily.call(this, 'list_workspaces', {});
 				const workspaces = (data.workspaces as IDataObject[] | undefined) ?? [];
 
-				return workspaces.map((workspace) => ({
-					name: String(workspace.name),
-					value: String(workspace.id),
-				}));
+				// The empty default means "the key's only workspace". Listing it keeps
+				// n8n from flagging the default as an unsupported value.
+				return [
+					{
+						name: "Key's Workspace (Default)",
+						value: '',
+						description: 'Use this when the API key covers one workspace',
+					},
+					...workspaces.map((workspace) => ({
+						name: String(workspace.name),
+						value: String(workspace.id),
+					})),
+				];
 			},
 
 			async getChannels(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
@@ -183,10 +193,12 @@ async function runOperation(
 	operation: string,
 	i: number,
 ): Promise<IDataObject[]> {
-	const workspace = () =>
-		(this.getNodeParameter('workspaceId', i, '') as string) || undefined;
-	const defaultKey = () =>
-		`n8n-${this.getExecutionId()}-${this.getNode().id}-${i}`.slice(0, 200);
+	const workspace = () => (this.getNodeParameter('workspaceId', i, '') as string) || undefined;
+	const withKey = (args: IDataObject, userKey?: string): IDataObject => ({
+		...args,
+		idempotencyKey:
+			userKey || defaultIdempotencyKey(this.getExecutionId(), this.getNode().id, args),
+	});
 
 	if (resource === 'post') {
 		if (operation === 'create') {
@@ -204,33 +216,48 @@ async function runOperation(
 			const result = await callPostDaily.call(
 				this,
 				'create_post',
-				compact({
-					workspaceId: workspace(),
-					channels: this.getNodeParameter('channels', i) as string[],
-					text: this.getNodeParameter('text', i) as string,
-					mode,
-					scheduledAt:
-						mode === 'scheduled' ? (this.getNodeParameter('scheduledAt', i) as string) : undefined,
-					confirmPublish: mode === 'now' ? true : undefined,
-					confirmWarnings: fields.continueDespiteWarnings === true ? true : undefined,
-					firstComment: fields.firstComment as string | undefined,
-					idempotencyKey: (fields.idempotencyKey as string) || defaultKey(),
-					media: mediaArg(fields),
-					channelSettings: channelSettingsArg.call(this, fields.channelSettings, i),
-					requestApproval: fields.requestApproval === true ? true : undefined,
-					tags: splitList(fields.tags).length > 0 ? splitList(fields.tags) : undefined,
-					timezone: fields.timezone as string | undefined,
-					title: fields.title as string | undefined,
-				}),
+				withKey(
+					compact({
+						workspaceId: workspace(),
+						channels: this.getNodeParameter('channels', i) as string[],
+						text: this.getNodeParameter('text', i) as string,
+						mode,
+						scheduledAt:
+							mode === 'scheduled'
+								? (this.getNodeParameter('scheduledAt', i) as string)
+								: undefined,
+						confirmPublish: mode === 'now' ? true : undefined,
+						confirmWarnings: fields.continueDespiteWarnings === true ? true : undefined,
+						firstComment: fields.firstComment as string | undefined,
+						media: mediaArg(fields),
+						channelSettings: channelSettingsArg.call(this, fields.channelSettings, i),
+						requestApproval: fields.requestApproval === true ? true : undefined,
+						tags: splitList(fields.tags).length > 0 ? splitList(fields.tags) : undefined,
+						timezone: fields.timezone as string | undefined,
+						title: fields.title as string | undefined,
+					}),
+					fields.idempotencyKey as string | undefined,
+				),
 				i,
 			);
 
-			if (result.outcome === 'needs_confirmation') {
-				throw new NodeOperationError(this.getNode(), String(result.summary ?? 'PostDaily needs a confirmation'), {
-					itemIndex: i,
-					description:
-						'PostDaily found warnings and saved nothing. Fix the post, or turn on Continue Despite Warnings.',
-				});
+			// Queue, Schedule and Publish Now keep the post as a draft when it breaks a
+			// network rule ("invalid") or has warnings ("needs_confirmation"). Draft
+			// mode always saves; its warnings are in validation.warnings.
+			if (result.outcome === 'invalid' || result.outcome === 'needs_confirmation') {
+				const draft = result.draftPostId ? ` (draft ${String(result.draftPostId)})` : '';
+
+				throw new NodeOperationError(
+					this.getNode(),
+					String(result.summary ?? 'PostDaily kept the post as a draft'),
+					{
+						itemIndex: i,
+						description:
+							result.outcome === 'invalid'
+								? `PostDaily saved it as a draft${draft} but did not ${mode === 'now' ? 'publish' : 'schedule'} it. Fix the errors, then try again.`
+								: `PostDaily saved it as a draft${draft} and is waiting for the warnings to be accepted. Fix the post, or turn on Continue Despite Warnings.`,
+					},
+				);
 			}
 
 			return [result];
@@ -238,7 +265,12 @@ async function runOperation(
 
 		if (operation === 'get') {
 			return [
-				await callPostDaily.call(this, 'get_post', { postId: this.getNodeParameter('postId', i) as string }, i),
+				await callPostDaily.call(
+					this,
+					'get_post',
+					{ postId: this.getNodeParameter('postId', i) as string },
+					i,
+				),
 			];
 		}
 
@@ -255,9 +287,11 @@ async function runOperation(
 					'list_posts',
 					compact({
 						workspaceId: workspace(),
-						channels: splitList(filters.channels).length > 0 ? splitList(filters.channels) : undefined,
-						statuses:
-							(filters.statuses as string[] | undefined)?.length ? filters.statuses : undefined,
+						channels:
+							splitList(filters.channels).length > 0 ? splitList(filters.channels) : undefined,
+						statuses: (filters.statuses as string[] | undefined)?.length
+							? filters.statuses
+							: undefined,
 						search: filters.search as string | undefined,
 						from: filters.from as string | undefined,
 						to: filters.to as string | undefined,
@@ -286,7 +320,8 @@ async function runOperation(
 						text: fields.text as string | undefined,
 						title: fields.title as string | undefined,
 						firstComment: fields.firstComment as string | undefined,
-						channels: splitList(fields.channels).length > 0 ? splitList(fields.channels) : undefined,
+						channels:
+							splitList(fields.channels).length > 0 ? splitList(fields.channels) : undefined,
 						tags: splitList(fields.tags).length > 0 ? splitList(fields.tags) : undefined,
 						media: mediaArg(fields),
 						channelSettings: channelSettingsArg.call(this, fields.channelSettings, i),
@@ -299,7 +334,12 @@ async function runOperation(
 
 		if (operation === 'delete') {
 			return [
-				await callPostDaily.call(this, 'delete_post', { postId: this.getNodeParameter('postId', i) as string }, i),
+				await callPostDaily.call(
+					this,
+					'delete_post',
+					{ postId: this.getNodeParameter('postId', i) as string },
+					i,
+				),
 			];
 		}
 
@@ -327,12 +367,13 @@ async function runOperation(
 				await callPostDaily.call(
 					this,
 					'import_media',
-					compact({
-						workspaceId: workspace(),
-						url: this.getNodeParameter('url', i) as string,
-						filename,
-						idempotencyKey: defaultKey(),
-					}),
+					withKey(
+						compact({
+							workspaceId: workspace(),
+							url: this.getNodeParameter('url', i) as string,
+							filename,
+						}),
+					),
 					i,
 				),
 			];
@@ -357,7 +398,9 @@ async function runOperation(
 			await this.helpers.httpRequest({
 				method: 'PUT',
 				url: String(started.uploadUrl),
-				headers: (started.headers as IDataObject | undefined) ?? { 'Content-Type': binary.mimeType },
+				headers: (started.headers as IDataObject | undefined) ?? {
+					'Content-Type': binary.mimeType,
+				},
 				body: bytes,
 				json: false,
 			});

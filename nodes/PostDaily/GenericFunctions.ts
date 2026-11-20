@@ -131,7 +131,9 @@ export async function callPostDaily(
 	const result = reply.result ?? {};
 
 	if (result.isError) {
-		const text = result.content?.find((part) => part.type === 'text')?.text ?? 'PostDaily refused the request.';
+		const text =
+			result.content?.find((part) => part.type === 'text')?.text ??
+			'PostDaily refused the request.';
 		const [first, ...rest] = text.split('\n');
 		const access = accessLevelMessage(text);
 
@@ -151,4 +153,33 @@ export function splitList(value: unknown): string[] {
 		.split(',')
 		.map((part) => part.trim())
 		.filter(Boolean);
+}
+
+/** FNV-1a over a string, as 16 hex characters (two 32-bit halves). Not for security: only to tell requests apart. */
+function fingerprint(text: string): string {
+	let a = 0x811c9dc5;
+	let b = 0x01000193 ^ text.length;
+
+	for (let index = 0; index < text.length; index++) {
+		const code = text.charCodeAt(index);
+		a = Math.imul(a ^ code, 0x01000193) >>> 0;
+		b = Math.imul(b ^ code, 0x5bd1e995) >>> 0;
+	}
+
+	return a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0');
+}
+
+/**
+ * The idempotency key used when the user sets none. It is built from the
+ * execution, the node and what is being sent, so:
+ * - a retried step (same content) gets the same key and creates nothing new;
+ * - each round of a Loop Over Items, where the item index is always 0 but the
+ *   content differs, gets its own key.
+ */
+export function defaultIdempotencyKey(
+	executionId: string,
+	nodeId: string,
+	args: IDataObject,
+): string {
+	return `n8n-${executionId}-${nodeId}-${fingerprint(JSON.stringify(args))}`.slice(0, 200);
 }

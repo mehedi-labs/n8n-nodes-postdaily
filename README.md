@@ -64,9 +64,13 @@ default:
     Now**.
   - **Retry** publishes again only with **Confirm Retry** on. Without it, it
     lists the channels it would retry.
-- **Warnings stop the item.** If PostDaily warns about a post (for example
-  Instagram with no image), nothing is saved and the item fails with the
-  warning. To save anyway, turn on **Continue Despite Warnings**.
+- **Problems keep the post as a draft.**
+  - With Add to Queue, Schedule or Publish Now, a post is kept as a draft
+    when it breaks a network rule (for example text over X's limit), or when
+    PostDaily asks for its warnings to be accepted. The item fails with
+    PostDaily's message.
+  - To go ahead despite warnings, turn on **Continue Despite Warnings**.
+  - Draft mode always saves. Its warnings are listed in `validation.warnings`.
 - **No double posts.** Every create sends an idempotency key. By default the
   key is built from the execution, node and item, so a retried step returns
   the first result. For a key that holds across executions, set

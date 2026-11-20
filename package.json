@@ -30,7 +30,8 @@
     "lint": "n8n-node lint",
     "lint:fix": "n8n-node lint --fix",
     "release": "n8n-node release",
-    "prepublishOnly": "n8n-node prerelease"
+    "prepublishOnly": "n8n-node prerelease",
+    "check:version": "node scripts/check-version.mjs"
   },
   "files": [
     "dist"

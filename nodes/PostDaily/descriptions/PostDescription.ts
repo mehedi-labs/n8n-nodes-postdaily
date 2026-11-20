@@ -160,7 +160,7 @@ export const postFields: INodeProperties[] = [
 				type: 'boolean',
 				default: false,
 				description:
-					'Whether to save the post even when PostDaily warns about it. When off, a warning stops this item with the warning as the error.',
+					'Whether to add to the queue, schedule or publish even when PostDaily warns about the post. When off, the post is kept as a draft and this item fails with the warning. Drafts are always saved.',
 			},
 			{
 				displayName: 'First Comment',
