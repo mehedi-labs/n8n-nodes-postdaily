@@ -21,7 +21,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mehedihasan2810/n8n-nodes-postdaily.git"
+    "url": "git+https://github.com/mehedi-labs/n8n-nodes-postdaily.git"
   },
   "scripts": {
     "build": "n8n-node build",
@@ -56,6 +56,6 @@
     "n8n-workflow": "*"
   },
   "bugs": {
-    "url": "https://github.com/mehedihasan2810/n8n-nodes-postdaily/issues"
+    "url": "https://github.com/mehedi-labs/n8n-nodes-postdaily/issues"
   }
 }
