@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- The package author email is now support@postdaily.app, so n8n's creator
+  portal can send its ownership code there. No code changes.
+
 ## 0.2.0
 
 - Talks to PostDaily's REST API (`https://api.postdaily.app/v1`) instead of

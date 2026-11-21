@@ -9,7 +9,7 @@ import type {
 import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 
 /** Sent as the User-Agent so PostDaily can count calls from this node. Keep in step with package.json. */
-export const NODE_VERSION = '0.2.0';
+export const NODE_VERSION = '0.2.1';
 
 type PostDailyContext = IExecuteFunctions | ILoadOptionsFunctions;
 

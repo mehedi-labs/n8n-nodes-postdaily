@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-postdaily",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "n8n node for PostDaily: draft, queue and schedule social media posts to Instagram, Facebook, TikTok, YouTube, LinkedIn, X, Threads, Pinterest, Bluesky and Mastodon.",
   "license": "MIT",
   "homepage": "https://www.postdaily.app/help/connect-with-an-api-key",
@@ -16,7 +16,7 @@
   ],
   "author": {
     "name": "mehedihasan2810",
-    "email": "117534561+mehedihasan2810@users.noreply.github.com",
+    "email": "support@postdaily.app",
     "url": "https://github.com/mehedihasan2810"
   },
   "repository": {
