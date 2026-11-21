@@ -8,7 +8,7 @@ import type {
 import { NodeApiError } from 'n8n-workflow';
 
 /** Sent as the User-Agent so PostDaily can count calls from this node. Keep in step with package.json. */
-export const NODE_VERSION = '0.1.0';
+export const NODE_VERSION = '0.1.1';
 
 const MCP_PROTOCOL_VERSION = '2025-11-25';
 
