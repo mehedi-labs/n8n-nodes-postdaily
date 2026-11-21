@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0
+
+- Talks to PostDaily's REST API (`https://api.postdaily.app/v1`) instead of
+  its MCP endpoint. n8n verifies community nodes only against a vendor's REST
+  API.
+- The credential's address field is now **Base URL**
+  (`https://api.postdaily.app/v1`). Existing 0.1.x credentials need it set
+  again.
+- An empty Post ID or Media ID fails the item with a clear message.
+
 ## 0.1.1
 
 - First published release. 0.1.0 was tagged but never reached npm: a new package needs `publishConfig.access` set to public before npm will attach provenance.

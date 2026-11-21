@@ -97,7 +97,8 @@ export const postFields: INodeProperties[] = [
 		required: true,
 		default: '',
 		displayOptions: showFor(['create']),
-		description: 'The post text for every channel. PostDaily checks it against each network\'s limits.',
+		description:
+			"The post text for every channel. PostDaily checks it against each network's limits.",
 	},
 	{
 		displayName: 'Mode',
@@ -135,7 +136,8 @@ export const postFields: INodeProperties[] = [
 		required: true,
 		default: '',
 		displayOptions: { show: { resource: ['post'], operation: ['create'], mode: ['scheduled'] } },
-		description: 'When to publish. Without a time zone offset it is read in the workspace time zone.',
+		description:
+			'When to publish. Without a time zone offset it is read in the workspace time zone.',
 	},
 	{
 		displayName: 'Confirm Publish Now',
@@ -191,7 +193,8 @@ export const postFields: INodeProperties[] = [
 				name: 'requestApproval',
 				type: 'boolean',
 				default: false,
-				description: 'Whether to hold the post for client approval, in workspaces where approval is optional',
+				description:
+					'Whether to hold the post for client approval, in workspaces where approval is optional',
 			},
 			{
 				displayName: 'Tags',
@@ -206,14 +209,16 @@ export const postFields: INodeProperties[] = [
 				type: 'string',
 				default: '',
 				placeholder: 'Europe/London',
-				description: 'IANA time zone for a scheduled time without an offset. Defaults to the workspace time zone.',
+				description:
+					'IANA time zone for a scheduled time without an offset. Defaults to the workspace time zone.',
 			},
 			{
 				displayName: 'Title',
 				name: 'title',
 				type: 'string',
 				default: '',
-				description: 'Internal title shown in PostDaily (YouTube and Pinterest titles go in Network Options)',
+				description:
+					'Internal title shown in PostDaily (YouTube and Pinterest titles go in Network Options)',
 			},
 		],
 	},
@@ -242,7 +247,8 @@ export const postFields: INodeProperties[] = [
 				name: 'channels',
 				type: 'string',
 				default: '',
-				description: 'Comma-separated channel IDs, network names or @handles. Replaces the current channels.',
+				description:
+					'Comma-separated channel IDs, network names or @handles. Replaces the current channels.',
 			},
 			{
 				displayName: 'Expected Version',
@@ -296,7 +302,8 @@ export const postFields: INodeProperties[] = [
 		type: 'string',
 		default: '',
 		displayOptions: showFor(['retry']),
-		description: 'Retry only this channel (ID, network name or @handle). Leave empty to retry every failed channel.',
+		description:
+			'Retry only this channel (ID, network name or @handle). Leave empty to retry every failed channel.',
 	},
 	{
 		displayName: 'Confirm Retry',

@@ -1,150 +1,134 @@
 import type {
 	IDataObject,
 	IExecuteFunctions,
+	IHttpRequestMethods,
 	IHttpRequestOptions,
 	ILoadOptionsFunctions,
 	JsonObject,
 } from 'n8n-workflow';
-import { NodeApiError } from 'n8n-workflow';
+import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 
 /** Sent as the User-Agent so PostDaily can count calls from this node. Keep in step with package.json. */
-export const NODE_VERSION = '0.1.1';
-
-const MCP_PROTOCOL_VERSION = '2025-11-25';
+export const NODE_VERSION = '0.2.0';
 
 type PostDailyContext = IExecuteFunctions | ILoadOptionsFunctions;
 
-type ToolResult = {
-	content?: Array<{ type: string; text?: string }>;
-	isError?: boolean;
-	structuredContent?: IDataObject;
+type Route = {
+	method: IHttpRequestMethods;
+	/** Path under the base URL; `{postId}` or `{mediaId}` is filled from the arguments. */
+	path: string;
+	/** Send the arguments as query parameters rather than a JSON body. */
+	query?: boolean;
 };
 
-type RpcReply = {
-	error?: { code: number; message: string };
-	result?: ToolResult;
+/** PostDaily REST API v1 (https://api.postdaily.app/v1), one route per operation. */
+const ROUTES: Record<string, Route> = {
+	list_workspaces: { method: 'GET', path: '/workspaces', query: true },
+	list_channels: { method: 'GET', path: '/channels', query: true },
+	list_posts: { method: 'GET', path: '/posts', query: true },
+	get_post: { method: 'GET', path: '/posts/{postId}' },
+	create_post: { method: 'POST', path: '/posts' },
+	update_post: { method: 'PATCH', path: '/posts/{postId}' },
+	delete_post: { method: 'DELETE', path: '/posts/{postId}' },
+	retry_post: { method: 'POST', path: '/posts/{postId}/retry' },
+	import_media: { method: 'POST', path: '/media/imports' },
+	create_media_upload: { method: 'POST', path: '/media/uploads' },
+	complete_media_upload: { method: 'POST', path: '/media/uploads/{mediaId}/complete' },
 };
 
-/**
- * PostDaily answers a tool call as one Server-Sent Events frame
- * (`event: message` then `data: {...}`), or as plain JSON. Either way this
- * returns the JSON-RPC reply.
- */
-function readReply(body: unknown): RpcReply {
-	if (typeof body === 'object' && body !== null) {
-		return body as RpcReply;
-	}
+type ErrorBody = { error?: { code?: string; message?: string; hint?: string | null } };
 
-	const text = String(body ?? '');
-	const dataLine = text
-		.split('\n')
-		.filter((line) => line.startsWith('data:'))
-		.pop();
-
-	return JSON.parse(dataLine ? dataLine.slice(5) : text) as RpcReply;
-}
-
-/** The JSON PostDaily put after the human-readable summary, when there is no structuredContent. */
-function dataFromText(result: ToolResult): IDataObject {
-	const text = result.content?.find((part) => part.type === 'text')?.text ?? '';
-	const start = text.indexOf('{');
-
-	if (start === -1) {
-		return { summary: text };
-	}
-
-	try {
-		return JSON.parse(text.slice(start)) as IDataObject;
-	} catch {
-		return { summary: text };
-	}
+/** Query values as PostDaily reads them: lists comma-separated, everything else as text. */
+function toQuery(args: IDataObject): IDataObject {
+	return Object.fromEntries(
+		Object.entries(args).map(([name, value]) => [
+			name,
+			Array.isArray(value) ? value.join(',') : String(value),
+		]),
+	);
 }
 
 /**
- * PostDaily lists only the tools a key's access level allows, so a call to
- * any other tool comes back as "Tool <name> not found". Say what that means.
- */
-function accessLevelMessage(text: string): { message: string; description: string } | null {
-	const match = text.match(/Tool (\w+) not found/);
-
-	if (!match) {
-		return null;
-	}
-
-	return {
-		message: `This API key's access level does not allow ${match[1]}`,
-		description:
-			'Drafts only keys can create and edit drafts; Read only keys can only read. Scheduling, publishing, deleting and retrying need a Full access key, created in PostDaily under Settings → AI agents → API key.',
-	};
-}
-
-/**
- * Calls one PostDaily tool over the API-key MCP endpoint and returns its
- * result. A refusal (bad input, plan limit, a channel that needs
- * reconnecting...) becomes a NodeApiError carrying PostDaily's own message.
+ * Calls one PostDaily REST endpoint, named by the operation, and returns its
+ * JSON. A refusal (bad input, plan limit, an access level that does not
+ * allow it, a channel that needs reconnecting...) becomes a NodeApiError
+ * carrying PostDaily's own message and hint.
  */
 export async function callPostDaily(
 	this: PostDailyContext,
-	tool: string,
+	operation: string,
 	args: IDataObject,
 	itemIndex = 0,
 ): Promise<IDataObject> {
+	const route = ROUTES[operation];
+
+	if (!route) {
+		throw new NodeApiError(
+			this.getNode(),
+			{ message: `Unknown operation ${operation}` },
+			{ itemIndex },
+		);
+	}
+
+	const rest: IDataObject = { ...args };
+	const missing = [...route.path.matchAll(/\{(\w+)\}/g)]
+		.map((match) => match[1] ?? '')
+		.find((name) => String(rest[name] ?? '').trim() === '');
+
+	if (missing) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`${missing === 'postId' ? 'Post ID' : 'Media ID'} is required`,
+			{
+				itemIndex,
+				description:
+					'It is empty for this item. Check the expression, or the step that should have produced it.',
+			},
+		);
+	}
+
 	const credentials = await this.getCredentials('postDailyApi');
+	const path = route.path.replace(/\{(\w+)\}/g, (_match, name: string) => {
+		const value = encodeURIComponent(String(rest[name] ?? ''));
+		delete rest[name];
+		return value;
+	});
 	const options: IHttpRequestOptions = {
-		method: 'POST',
-		url: credentials.serverUrl as string,
-		headers: {
-			Accept: 'application/json, text/event-stream',
-			'Content-Type': 'application/json',
-			'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
-			'User-Agent': `n8n-nodes-postdaily/${NODE_VERSION}`,
-		},
-		body: JSON.stringify({
-			jsonrpc: '2.0',
-			id: `${tool}-${itemIndex}`,
-			method: 'tools/call',
-			params: { name: tool, arguments: args },
-		}),
-		json: false,
+		method: route.method,
+		url: `${String(credentials.baseUrl).replace(/\/+$/, '')}${path}`,
+		headers: { 'User-Agent': `n8n-nodes-postdaily/${NODE_VERSION}` },
+		json: true,
+		returnFullResponse: true,
+		ignoreHttpStatusErrors: true,
 	};
 
-	let reply: RpcReply;
+	if (route.query) {
+		options.qs = toQuery(rest);
+	} else if (route.method !== 'GET' && route.method !== 'DELETE') {
+		options.body = rest;
+	}
+
+	let response: { statusCode: number; body: unknown };
 
 	try {
-		reply = readReply(
-			await this.helpers.httpRequestWithAuthentication.call(this, 'postDailyApi', options),
-		);
+		response = await this.helpers.httpRequestWithAuthentication.call(this, 'postDailyApi', options);
 	} catch (error) {
 		throw new NodeApiError(this.getNode(), error as JsonObject, { itemIndex });
 	}
 
-	if (reply.error) {
-		const access = accessLevelMessage(reply.error.message);
+	if (response.statusCode >= 400) {
+		const failure = (response.body as ErrorBody | undefined)?.error;
+		const message = failure?.message ?? `PostDaily answered HTTP ${response.statusCode}`;
 
-		throw new NodeApiError(this.getNode(), reply.error as unknown as JsonObject, {
+		throw new NodeApiError(this.getNode(), (response.body ?? {}) as JsonObject, {
 			itemIndex,
-			message: access?.message ?? reply.error.message,
-			description: access?.description,
+			httpCode: String(response.statusCode),
+			message: failure?.code ? `${failure.code}: ${message}` : message,
+			description: failure?.hint ?? undefined,
 		});
 	}
 
-	const result = reply.result ?? {};
-
-	if (result.isError) {
-		const text =
-			result.content?.find((part) => part.type === 'text')?.text ??
-			'PostDaily refused the request.';
-		const [first, ...rest] = text.split('\n');
-		const access = accessLevelMessage(text);
-
-		throw new NodeApiError(this.getNode(), { message: text } as JsonObject, {
-			itemIndex,
-			message: access?.message ?? first,
-			description: access?.description ?? (rest.join('\n').trim() || undefined),
-		});
-	}
-
-	return result.structuredContent ?? dataFromText(result);
+	return (response.body ?? {}) as IDataObject;
 }
 
 /** Splits "a, b ,c" into ["a", "b", "c"]. */

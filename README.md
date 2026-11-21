@@ -30,7 +30,7 @@ The node uses a **PostDaily API key**.
 4. Pick the workspace the workflow should use.
 5. Copy the key. PostDaily shows it only once.
 6. In n8n, create a **PostDaily API** credential and paste the key. Leave
-   **Server URL** as it is.
+   **Base URL** as it is.
 
 When you save the credential, n8n tests it by listing your workspaces. To
 revoke a key, go to **Settings → AI agents** in PostDaily. A key also stops
@@ -110,8 +110,8 @@ PostDaily's message ends up in the item's `error` field.
 Tested with n8n 2.48.7, the current stable release.
 
 How it talks to PostDaily:
-- It calls PostDaily's API-key endpoint (`https://mcp.postdaily.app/key/mcp`)
-  with one request per action.
+- It calls PostDaily's REST API at `https://api.postdaily.app/v1`, one
+  request per action, with your API key as a Bearer token.
 - It has no runtime dependencies.
 - It sends `User-Agent: n8n-nodes-postdaily/<version>`.
 

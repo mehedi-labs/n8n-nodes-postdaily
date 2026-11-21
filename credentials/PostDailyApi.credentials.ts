@@ -31,11 +31,11 @@ export class PostDailyApi implements ICredentialType {
 				'Create one in PostDaily under Settings → AI agents → API key. A Drafts only key can create and edit drafts but never schedule or publish.',
 		},
 		{
-			displayName: 'Server URL',
-			name: 'serverUrl',
+			displayName: 'Base URL',
+			name: 'baseUrl',
 			type: 'string',
 			required: true,
-			default: 'https://mcp.postdaily.app/key/mcp',
+			default: 'https://api.postdaily.app/v1',
 			description: 'Leave as it is unless PostDaily support gives you another address',
 		},
 	];
@@ -51,19 +51,9 @@ export class PostDailyApi implements ICredentialType {
 
 	test: ICredentialTestRequest = {
 		request: {
-			method: 'POST',
-			url: '={{$credentials.serverUrl}}',
-			headers: {
-				Accept: 'application/json, text/event-stream',
-				'Content-Type': 'application/json',
-				'MCP-Protocol-Version': '2025-11-25',
-			},
-			body: {
-				jsonrpc: '2.0',
-				id: 1,
-				method: 'tools/call',
-				params: { name: 'list_workspaces', arguments: {} },
-			},
+			method: 'GET',
+			baseURL: '={{$credentials.baseUrl}}',
+			url: '/workspaces',
 		},
 	};
 }
